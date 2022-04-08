@@ -8,7 +8,7 @@ Group member
 
 Development abstract:
 
-In 12 days, our group needs to implement a simple 5-stage pipeline simulator.
+In 12 days, our group needs to implement a simple 5-stage in-order pipeline simulator.
 
 Some assumption are made to simplify the project:
 1. No branch prediction
