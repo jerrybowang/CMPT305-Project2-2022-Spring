@@ -490,7 +490,9 @@ void Process_WB(){
 
 void Process_print(){
 	//print the cycles of the simulation
-	printf("The total execution time (in cycles) at the end of simulation is %lu. \n", cycle_count);
+	cout << "Simulation clock: "<< cycle_count << endl;
+
+	cout << "The total execution time (in cycles) at the end of simulation: " << cycle_count << endl;
 
 	//count the total completed instructions
 	unsigned long int sum = Instruction_sum();
@@ -508,6 +510,7 @@ void Process_print(){
 		Load_per = ((float)Instruction_count[3]/sum)*100;
 		Store_per = ((float)Instruction_count[4]/sum)*100;
 	}
-	printf ("%.4f%% are integer instructions \n%.4f%% are floating point \n%.4f%% are branches \n%.4f%% are loads \n%.4f%% are stores \n", Integer_per, Floating_per, Branch_per, Load_per, Store_per);
+	cout << "Histogram: \n";
+	printf ("%.4f%% are integer instructions \n%.4f%% are floating point \n%.4f%% are branches \n%.4f%% are loads \n%.4f%% are stores \n\n", Integer_per, Floating_per, Branch_per, Load_per, Store_per);
 
 }
