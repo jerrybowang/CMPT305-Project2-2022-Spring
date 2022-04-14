@@ -2,11 +2,10 @@
 #include <fstream>
 #include <sstream>
 #include <string>
-#include <unordered_set>
 #include <vector>
 #include <queue>
 #include "Instruction.h"
-
+#include <map>
 
 using namespace std;
 
@@ -38,7 +37,13 @@ unsigned long int cycle_count = 0;
 
 
 // global vars-----------
-unordered_set<unsigned long int> depen;
+// address, line position of last completed address
+map<unsigned long int,unsigned long int> depen;
+
+// the latest instance of address and its line number
+map<unsigned long int,unsigned long int> occor;
+
+unsigned long int line_pos = 1;
 
 // signals
 bool end_read_file = false;
@@ -74,6 +79,16 @@ unsigned long int Instruction_sum(){
 	return sum;
 }
 
+void update_occor(unsigned long int line_number){
+	// add it to occor, and uodate
+	if (occor.find(line_number) != occor.end()){
+		occor[line_number] = line_pos;
+	}
+	else{
+		occor.insert(pair<unsigned long int,unsigned long int>(line_number, line_pos));
+	}
+}
+
 void pre_fetch(ifstream& inFile, unsigned int start_inst){
 	if (inFile.is_open()){
 		string line;
@@ -95,8 +110,17 @@ void pre_fetch(ifstream& inFile, unsigned int start_inst){
 			// get line number
 			getline(ss,temp,',');
 			line_number = stoul(temp, nullptr, 16);
-			// add it to depen
-			depen.insert(line_number);
+			// add it to depen, or update
+			if (depen.find(line_number) != depen.end()){
+				depen[line_number] = line_pos;
+			}
+			else{
+				depen.insert(pair<unsigned long int,unsigned long int>(line_number, line_pos));
+			}
+			// add it to occor, and uodate
+			update_occor(line_number);
+			// incriment line_pos
+			line_pos++;
 		}
 
 	}
@@ -181,7 +205,6 @@ int main(int argc, char* argv[]) {
 		Instruction_need_to_fetch = run_inst;
 		W = pipeline_width;
 
-
 		try{
 			// run pre-fetching to get all commpleted Instruction address
 			pre_fetch(inFile, start_inst);
@@ -191,10 +214,16 @@ int main(int argc, char* argv[]) {
 			if (Instruction_need_to_fetch > 0){
 				// run simulations
 				while(end_sim == false){
+					// cout << "\nCycle: " << cycle_count<<endl;
+					// cout << "IF\n";
 					Process_IF(inFile);
+					// cout << "ID\n";
 					Process_ID();
+					// cout << "EX\n";
 					Process_EX();
+					// cout << "MEM\n";
 					Process_MEM();
+					// cout << "WB\n";
 					Process_WB();
 					cycle_count++;
 					// flush all Instruction
@@ -206,10 +235,8 @@ int main(int argc, char* argv[]) {
 					load_MEM_lock = false;
 					store_MEM_lock = false;
 
-
 				}
-				// adjust offset because cycle starts at 0
-				cycle_count--;
+
 			}
 
 			// print restuls
@@ -314,7 +341,7 @@ void Process_IF(ifstream& inFile){
 		}
 
 		// create Instruction object
-		Instruction ins(line_address, ins_type, dependen);
+		Instruction ins(line_address, ins_type, dependen, line_pos,occor);
 
 		// clear temp vector for next use
 		dependen.clear();
@@ -332,6 +359,14 @@ void Process_IF(ifstream& inFile){
 		// finished IF, push to ID imm Q
 		ID_Q_imm.push(ins);
 
+		// ins.print();
+
+		// update occor map
+		update_occor(line_address);
+
+		// incriment line_pos
+		line_pos++;
+
 	}
 }
 
@@ -346,17 +381,14 @@ void Process_ID(){
 		//create a temp value to accept the first instruction in ID_Q
 		Instruction temp = ID_Q.front();
 
-		//if the instruction is dependent on some instruction
-		//then return directly until that not dependent
-		if(temp.dependency_check(depen)==false){
-			return;
-		}
+
 
 		//Delete the instruction in ID_Q that has done ID process
 		ID_Q.pop();
 
 		// finished ID, push to EX imm Q
 		EX_Q_imm.push(temp);
+		// temp.print();
 	}
 
 }
@@ -369,6 +401,13 @@ void Process_EX(){
 		}
 		//create a temp value to accept the first instruction in EX_Q
 		Instruction temp = EX_Q.front();
+
+		//if the instruction is dependent on some instruction
+		//then return directly until that not dependent
+		if(temp.dependency_check(depen)==false){
+			return;
+		}
+
 		if(temp.get_type() == Integer) {
 			// if int ALU locked, do nothing
 			if (int_EX_lock){
@@ -400,8 +439,20 @@ void Process_EX(){
 		}
 		// pop finished exuction
 		EX_Q.pop();
+
+		// add/update dependency to map
+		if (temp.get_type() == Integer || temp.get_type() == Floating){
+			if (depen.find(temp.get_address()) == depen.end()){
+				depen.insert(pair<unsigned long int,unsigned long int>(temp.get_address(),temp.get_line_position()));
+			}
+			else{
+				depen[temp.get_address()] = temp.get_line_position();
+			}
+		}
+
 		// push into temp_MEM queue
 		MEM_Q_imm.push(temp);
+		// temp.print();
 
 	}
 }
@@ -436,8 +487,21 @@ void Process_MEM(){
 		}
 		// pop finished exuction
 		MEM_Q.pop();
+
+		// add/update dependency to map
+		if (temp.get_type() == Load || temp.get_type() == Store){
+			if (depen.find(temp.get_address()) == depen.end()){
+				depen.insert(pair<unsigned long int,unsigned long int>(temp.get_address(),temp.get_line_position()));
+			}
+			else{
+				depen[temp.get_address()] = temp.get_line_position();
+			}
+		}
+
+
 		// push into temp_WB queue
 		WB_Q_imm.push(temp);
+		// temp.print();
 
 	}
 }
@@ -458,9 +522,17 @@ void Process_WB(){
 			end_sim = true;
 		}
 
-		//add the completed instruction to hash table
+		//add the completed instruction to map
+		// update if necesscary
 		//for checking dependencey
-		depen.insert(temp.get_address());
+
+		if (depen.find(temp.get_address()) == depen.end()){
+			depen.insert(pair<unsigned long int,unsigned long int>(temp.get_address(),temp.get_line_position()));
+		}
+		else{
+			depen[temp.get_address()] = temp.get_line_position();
+		}
+
 
 		//count the instruction type
 		switch(temp.get_type()){
@@ -485,6 +557,7 @@ void Process_WB(){
 
 		//Delete the instruction in WB_Q that has done WB process
 		WB_Q.pop();
+		// temp.print();
 	}
 }
 
