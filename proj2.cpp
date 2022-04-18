@@ -34,8 +34,6 @@ int W = 0;
 
 unsigned long int cycle_count = 0;
 
-
-
 // global vars-----------
 // address, line position of last completed address
 map<unsigned long int,unsigned long int> depen;
@@ -421,13 +419,9 @@ void Process_EX(){
 			}
 		}
 
+		// if it is branch, unlock the lock
 		if(temp.get_type() == Branch){
-			if(branch_lock){
-				branch_lock = false;
-				EX_Q.pop();
-				MEM_Q_imm.push(temp);
-				return;
-			}
+			branch_lock = false;
 		}
 		// check if it is Integer
 		if (temp.get_type() == Integer){
@@ -441,7 +435,7 @@ void Process_EX(){
 		EX_Q.pop();
 
 		// add/update dependency to map
-		if (temp.get_type() == Integer || temp.get_type() == Floating){
+		if (temp.get_type() == Integer || temp.get_type() == Floating || temp.get_type() == Branch){
 			if (depen.find(temp.get_address()) == depen.end()){
 				depen.insert(pair<unsigned long int,unsigned long int>(temp.get_address(),temp.get_line_position()));
 			}
@@ -525,14 +519,14 @@ void Process_WB(){
 		//add the completed instruction to map
 		// update if necesscary
 		//for checking dependencey
+		// this is done in EX and MEM stage
 
-		if (depen.find(temp.get_address()) == depen.end()){
-			depen.insert(pair<unsigned long int,unsigned long int>(temp.get_address(),temp.get_line_position()));
-		}
-		else{
-			depen[temp.get_address()] = temp.get_line_position();
-		}
-
+		// if (depen.find(temp.get_address()) == depen.end()){
+		// 	depen.insert(pair<unsigned long int,unsigned long int>(temp.get_address(),temp.get_line_position()));
+		// }
+		// else{
+		// 	depen[temp.get_address()] = temp.get_line_position();
+		// }
 
 		//count the instruction type
 		switch(temp.get_type()){
